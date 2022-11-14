@@ -36,6 +36,16 @@ def _get_value(data, tag):
 
 class Document:
     def __init__(self, data, _id=None):
+        """
+        Parameters
+        ----------
+            data : dict
+                keys:
+                    article
+                    title
+                    issue
+                    fulltexts (list of dict: uri, uri_text, lang, )
+        """
         self.data = {}
         try:
             self.data['article'] = data['article']

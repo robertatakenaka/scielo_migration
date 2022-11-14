@@ -21,7 +21,7 @@ from scielo_classic_website.spsxml.sps_xml_article_meta import (
     XMLArticleMetaPagesInfoPipe,
     XMLArticleMetaHistoryPipe,
     XMLArticleMetaPermissionPipe,
-    # XMLArticleMetaSelfUriPipe,
+    XMLArticleMetaSelfUriPipe,
     XMLArticleMetaAbstractsPipe,
     XMLArticleMetaKeywordsPipe,
     # XMLArticleMetaCountsPipe,

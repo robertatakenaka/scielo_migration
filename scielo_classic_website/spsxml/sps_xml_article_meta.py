@@ -524,3 +524,30 @@ class XMLArticleMetaPermissionPipe(plumber.Pipe):
         articlemeta.append(permissions)
 
         return data
+
+
+class XMLArticleMetaSelfUriPipe(plumber.Pipe):
+    """Adiciona tag `self-uri` ao article-meta do artigo.
+    As tags `self-uri` disponibilizam fontes alternativas para o
+    texto completo."""
+
+    def precond(data):
+        raw, _ = data
+
+        if not raw.data.get("fulltexts"):
+            raise plumber.UnmetPrecondition()
+
+    @plumber.precondition(precond)
+    def transform(self, data):
+        raw, xml = data
+        articlemeta = xml.find('./front/article-meta')
+
+        # data injection in Document
+        for item in raw.data.get("fulltexts", []):
+            self_uri = ET.Element("self-uri")
+            self_uri.set("{http://www.w3.org/1999/xlink}href", item['uri'])
+            self_uri.set("{http://www.w3.org/XML/1998/namespace}lang", item['lang'])
+            self_uri.text = item.get("uri_text") or ''
+            articlemeta.append(self_uri)
+
+        return data
