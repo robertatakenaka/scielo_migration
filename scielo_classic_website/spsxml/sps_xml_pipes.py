@@ -24,10 +24,10 @@ from scielo_classic_website.spsxml.sps_xml_article_meta import (
     XMLArticleMetaSelfUriPipe,
     XMLArticleMetaAbstractsPipe,
     XMLArticleMetaKeywordsPipe,
-    # XMLArticleMetaCountsPipe,
     # XMLBodyPipe,
     # XMLArticleMetaCitationsPipe,
     # XMLSubArticlePipe,
+    XMLArticleMetaCountsPipe,
 )
 
 

@@ -551,3 +551,86 @@ class XMLArticleMetaSelfUriPipe(plumber.Pipe):
             articlemeta.append(self_uri)
 
         return data
+
+
+class XMLArticleMetaCountsPipe(plumber.Pipe):
+
+    def transform(self, data):
+        raw, xml = data
+
+        articlemeta = xml.find('./front/article-meta')
+
+        counts = articlemeta.find("counts")
+        if counts is None:
+            counts = ET.Element('counts')
+
+        body_node = xml.find('./body')
+
+        elems = [
+            ('fig-count',
+                len(body_node.findall(".//fig[@id]")) +
+                len(body_node.findall(".//fig-group[@id]"))),
+            ('table-count',
+                len(body_node.findall(".//table-wrap[@id]")) +
+                len(body_node.findall(".//table-wrap-group[@id]"))),
+            ('equation-count',
+                len(body_node.findall(".//disp-formula[@id]"))),
+        ]
+
+        for elem_name, count in elems:
+            count_elem = counts.find(elem_name)
+            if count_elem is None:
+                count_elem = ET.Element(elem_name)
+            count_elem.set('count', str(count))
+            counts.append(count_elem)
+
+        count_refs = ET.Element('ref-count')
+        if raw.citations:
+            count_refs.set('count', str(len(raw.citations)))
+        else:
+            count_refs.set('count', '0')
+        counts.append(count_refs)
+
+        try:
+            startpage = int(raw.start_page or 0)
+            endpage = int(raw.end_page or raw.start_page or 0)
+            if 0 < startpage <= endpage:
+                count_pages = ET.Element('page-count')
+                count_pages.set('count', str(endpage - startpage + 1))
+                counts.append(count_pages)
+        except (ValueError, TypeError):
+            pass
+
+        articlemeta.append(counts)
+
+        for subart in xml.findall("./sub-article"):
+            frontstub = subart.find("front-stub")
+            if frontstub is None:
+                subart.append(ET.Element("front-stub"))
+
+            counts = subart.find("front-stub/counts")
+            if counts is None:
+                counts = ET.Element('counts')
+
+            body_node = xml.find('./body')
+
+            elems = [
+                ('fig-count',
+                    len(body_node.findall(".//fig[@id]")) +
+                    len(body_node.findall(".//fig-group[@id]"))),
+                ('table-count',
+                    len(body_node.findall(".//table-wrap[@id]")) +
+                    len(body_node.findall(".//table-wrap-group[@id]"))),
+                ('equation-count',
+                    len(body_node.findall(".//disp-formula[@id]"))),
+            ]
+
+            for elem_name, count in elems:
+                count_elem = counts.find(elem_name)
+                if count_elem is None:
+                    count_elem = ET.Element(elem_name)
+                count_elem.set('count', str(count))
+                counts.append(count_elem)
+
+            frontstub.append(counts)
+        return data
