@@ -24,10 +24,12 @@ from scielo_classic_website.spsxml.sps_xml_article_meta import (
     XMLArticleMetaSelfUriPipe,
     XMLArticleMetaAbstractsPipe,
     XMLArticleMetaKeywordsPipe,
-    # XMLBodyPipe,
-    # XMLArticleMetaCitationsPipe,
-    # XMLSubArticlePipe,
     XMLArticleMetaCountsPipe,
+    # XMLBodyPipe,
+    # XMLSubArticlePipe,
+)
+from scielo_classic_website.spsxml.sps_xml_refs import (
+    XMLArticleMetaCitationsPipe,
 )
 
 
@@ -71,13 +73,13 @@ def _process(document):
             XMLArticleMetaPagesInfoPipe(),
             XMLArticleMetaHistoryPipe(),
             XMLArticleMetaPermissionPipe(),
-            # XMLArticleMetaSelfUriPipe(),
+            XMLArticleMetaSelfUriPipe(),
             XMLArticleMetaAbstractsPipe(),
             XMLArticleMetaKeywordsPipe(),
-            # XMLArticleMetaCountsPipe(),
             # XMLBodyPipe(),
-            # XMLArticleMetaCitationsPipe(),
+            XMLArticleMetaCitationsPipe(),
             # XMLSubArticlePipe(),
+            XMLArticleMetaCountsPipe(),
             XMLClosePipe(),
 
     )

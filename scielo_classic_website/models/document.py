@@ -1,6 +1,7 @@
 from scielo_classic_website.isisdb.meta_record import MetaRecord
 from scielo_classic_website.isisdb.h_record import DocumentRecord
 from scielo_classic_website.isisdb.p_record import ParagraphRecord
+from scielo_classic_website.isisdb.c_record import ReferenceRecord
 from scielo_classic_website.models.journal import Journal
 from scielo_classic_website.models.issue import Issue
 from scielo_classic_website.models.html_body import (
@@ -14,7 +15,7 @@ RECORD = dict(
     h=DocumentRecord,
     f=DocumentRecord,
     l=MetaRecord,
-    c=DocumentRecord,
+    c=ReferenceRecord,
     p=ParagraphRecord,
 )
 
