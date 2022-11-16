@@ -4,6 +4,7 @@ from scielo_classic_website.isisdb.p_record import ParagraphRecord
 from scielo_classic_website.isisdb.c_record import ReferenceRecord
 from scielo_classic_website.models.journal import Journal
 from scielo_classic_website.models.issue import Issue
+from scielo_classic_website.models.reference import Reference
 from scielo_classic_website.models.html_body import (
     BodyFromISIS,
     BodyFromHTMLFile,
@@ -140,6 +141,11 @@ class Document:
         for author in self.authors:
             author['affiliation'] = affs[author['xref']]['orgname']
             yield author
+
+    @property
+    def citations(self):
+        for record in self.document_records.get_record("c"):
+            yield Reference(record)
 
 
 class DocumentRecords:

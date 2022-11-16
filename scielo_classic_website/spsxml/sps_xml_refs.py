@@ -3,14 +3,20 @@ from io import StringIO
 import plumber
 from lxml import etree as ET
 
-from . import utils
+from . import (
+    utils,
+    xylose_adapters,
+)
+from scielo_classic_website.utils.html_code_utils import (
+    html_decode,
+)
 
 
 class XMLArticleMetaCitationsPipe(plumber.Pipe):
 
     def precond(data):
         raw, xml = data
-        if not raw.citations:
+        if not list(raw.citations):
             raise plumber.UnmetPrecondition()
 
     @plumber.precondition(precond)
@@ -27,7 +33,11 @@ class XMLArticleMetaCitationsPipe(plumber.Pipe):
 
         cit = XMLCitation()
         for citation in raw.citations:
-            reflist.append(cit.deploy(citation)[1])
+            # citation (scielo_classic_website.models.reference.Reference)
+            reflist.append(
+                cit.deploy(
+                    xylose_adapters.ReferenceXyloseAdapter(
+                        citation, html_decode))[1])
 
         return data
 
@@ -336,8 +346,7 @@ class XMLCitation(object):
                     if "given_names" in author:
                         givennames = ET.Element('given-names')
                         givennames.text = author['given_names']
-                        name.append(givennames)                
-
+                        name.append(givennames)
                     persongroup.append(name)
 
             xml.find('./element-citation').append(persongroup)
