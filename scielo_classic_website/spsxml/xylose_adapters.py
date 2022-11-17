@@ -7,6 +7,29 @@ def warn_future_deprecation(old, new, details=''):
     warnings.warn(msg, PendingDeprecationWarning)
 
 
+def format_institution(institution, sep=", "):
+    org = [
+        institution.get("name"),
+        institution.get('division'),
+    ]
+    return sep.join([item for item in org if item])
+
+
+def format_institutions(institutions, sep=" | "):
+    return sep.join(
+        [format_institution(inst) for inst in organizations]
+    )
+
+
+def format_location(city_and_state, country):
+    items = [
+        city_and_state.get("city"),
+        city_and_state.get("state"),
+        country,
+    ]
+    return ", ".join([c for c in items if c])
+
+
 class ReferenceXyloseAdapter:
 
     def __init__(self, fix_function, record=None, reference_record=None):
@@ -39,19 +62,16 @@ class ReferenceXyloseAdapter:
 
         return '; '.join(titles)
 
-    def title(self):
-        """
-        This method returns the first title independent of citation type
-        """
-        type_titles = ['article_title', 'thesis_title', 'conference_title', 'link_title']
-
-        titles = []
-
-        for title in type_titles:
-            if getattr(self, title):
-                titles.append(getattr(self, title))
-
-        return ', '.join(titles)
+    # def title(self):
+    #     """
+    #     This method returns the first title independent of citation type
+    #     """
+    #     type_titles = ['article_title', 'thesis_title', 'conference_title', 'link_title']
+    #     titles = []
+    #     for title in type_titles:
+    #         if getattr(self, title):
+    #             titles.append(getattr(self, title))
+    #     return ', '.join(titles)
 
     @property
     def conference_sponsor(self):
@@ -60,11 +80,8 @@ class ReferenceXyloseAdapter:
         The conference sponsor is presented like it is in the citation. (v52)
         """
         if self.publication_type == 'confproc':
-            org = [
-                self._reference_record.conference_organization.get("name"),
-                self._reference_record.conference_organization.get('division'),
-            ]
-            return ", ".join([item for item in org if item])
+            return format_institution(
+                self._reference_record.conference_organization)
 
     @property
     def conference_location(self):
@@ -72,12 +89,10 @@ class ReferenceXyloseAdapter:
         If it is a conference citation, this method retrieves the conference location, if it exists.
         The conference location is presented like it is in the citation. (v56)
         """
-        items = [
-            self._reference_record.conference_location.get("city"),
-            self._reference_record.conference_location.get("state"),
+        return format_location(
+            self._reference_record.conference_location,
             self._reference_record.conference_country,
-        ]
-        return ", ".join([c for c in items if c])
+        )
 
     @property
     def link(self):
@@ -93,6 +108,10 @@ class ReferenceXyloseAdapter:
     @property
     def last_page(self):
         return self._reference_record.end_page
+
+    @property
+    def pages_range(self):
+        return self._reference_record.pages_range.get("range")
 
     @property
     def institutions(self):
@@ -117,11 +136,7 @@ class ReferenceXyloseAdapter:
             self._reference_record.conference_organization or []
         )
         for inst in institutions:
-            items = [
-                inst['name'],
-                inst.get("division")
-            ]
-            yield ", ".join([c for c in items if c])
+            yield format_institution(inst)
 
     @property
     def analytic_institution_authors(self):
@@ -133,11 +148,7 @@ class ReferenceXyloseAdapter:
         IT REPLACES analytic_institution
         """
         for inst in self._reference_record.analytic_corporative_authors:
-            items = [
-                inst['name'],
-                inst.get("division")
-            ]
-            yield ", ".join([c for c in items if c])
+            yield format_institution(inst)
 
     @property
     def monographic_institution_authors(self):
@@ -149,11 +160,7 @@ class ReferenceXyloseAdapter:
         IT REPLACES monographic_institution
         """
         for inst in self._reference_record.monographic_corporative_authors:
-            items = [
-                inst['name'],
-                inst.get("division")
-            ]
-            yield ", ".join([c for c in items if c])
+            yield format_institution(inst)
 
     @property
     def monographic_institution(self):
@@ -170,11 +177,7 @@ class ReferenceXyloseAdapter:
         This method retrieves the sponsors in the given citation, if it exists.
         """
         if self._reference_record.project_sponsor:
-            items = [
-                self._reference_record.project_sponsor['name'],
-                self._reference_record.project_sponsor.get("division")
-            ]
-            yield ", ".join([c for c in items if c])
+            yield format_institution(self._reference_record.project_sponsor)
 
     @property
     def editor(self):
@@ -182,11 +185,7 @@ class ReferenceXyloseAdapter:
         This method retrieves the editors in the given citation, if it exists.
         """
         for inst in self._reference_record.serial_corporative_authors:
-            items = [
-                inst['name'],
-                inst.get("division")
-            ]
-            yield ", ".join([c for c in items if c])
+            yield format_institution(inst)
 
     @property
     def thesis_institution(self):
@@ -195,11 +194,7 @@ class ReferenceXyloseAdapter:
         it exists.
         """
         if self._reference_record.thesis_organization:
-            items = [
-                self._reference_record.thesis_organization['name'],
-                self._reference_record.thesis_organization.get("division")
-            ]
-            yield ", ".join([c for c in items if c])
+            yield format_institution(self._reference_record.thesis_organization)
 
     @property
     def comment(self):
@@ -207,9 +202,6 @@ class ReferenceXyloseAdapter:
         This method retrieves the citation comment, mainly used in link citation
         if exists (v61).
         """
-        if self.publication_type == 'webpage':
-            for item in self._reference_record.notes:
-                return 'Available at: <ext-link ext-link-type="uri" ns0:href="{0}">{1}</ext-link>'.format(self.link, self.link)
         return " | ".join(self._reference_record.notes)
 
     @property
@@ -409,9 +401,7 @@ class ReferenceXyloseAdapter:
         """
         This method retrieves the publisher address, if it exists.
         """
-        items = [
-            self._reference_record.publisher_location.get("city"),
-            self._reference_record.publisher_location.get("state"),
+        return format_location(
+            self._reference_record.publisher_location,
             self._reference_record.publisher_country,
-        ]
-        return ", ".join([c for c in items if c])
+        )

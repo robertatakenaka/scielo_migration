@@ -52,6 +52,7 @@ class Reference:
             return 'webpage'
 
     def _get_pages(self):
+        self._elocation = None
         for page in self._reference_record.pages:
             self._start_page = page.get("first")
             self._end_page = page.get("last")
@@ -60,7 +61,7 @@ class Reference:
             return
 
         pages_range = self._reference_record.pages_range
-        self._elocation = pages_range.get("elocation")
+        self._elocation = self._elocation or pages_range.get("elocation")
         self._pages_range = pages_range.get("range")
         if self._pages_range:
             self._start_page = self._pages_range.split('-')[0]
@@ -97,7 +98,7 @@ class Reference:
         """
         if not hasattr(self, '_elocation'):
             self._get_pages()
-        return self._elocation
+        return self._elocation or
 
     @property
     def pages(self):
@@ -118,49 +119,41 @@ class Reference:
         Book: Alice's Adventures in Wonderland
         """
         return (
-            self._reference_record.monographic_title['text'] or
-            self._reference_record.source
+            self._reference_record.monographic_title.get("text") or
+            self._reference_record.source.get("text")
         )
 
     @property
-    def chapter_title(self):
+    def journal_title(self):
         """
-        If it is a book citation, this method retrieves a chapter title, if it exists.
+        This method retrieves the citation source title. Ex:
+        Journal: Journal of Microbiology
+        Book: Alice's Adventures in Wonderland
         """
-        if self.publication_type == 'book':
-            return self._reference_record.article_title['text']
+        return self._reference_record.source.get("text")
 
     @property
     def article_title(self):
         """
         If it is an article citation, this method retrieves the article title, if it exists.
         """
-        if self.publication_type == 'journal':
-            return self._reference_record.article_title['text']
+        return self._reference_record.article_title.get('text')
 
     @property
-    def thesis_title(self):
+    def chapter_title(self):
         """
-        If it is a thesis citation, this method retrieves the thesis title, if it exists.
+        If it is an book citation, this method retrieves the chapter title, if it exists.
         """
-        if self.publication_type == 'thesis':
-            return self._reference_record.monographic_title['text']
+        if self.publication_type == "book":
+            return self._reference_record.article_title.get('text')
 
     @property
-    def conference_title(self):
-        if self.publication_type == 'confproc':
-            return self._reference_record.article_title['text']
-
-    @property
-    def link_title(self):
+    def data_title(self):
         """
-        If it is a link citation, this method retrieves the link title, if it exists.
+        If it is an data citation, this method retrieves the data title, if it exists.
         """
-        if self.publication_type == 'webpage':
-            if self._reference_record.article_title:
-                return self._reference_record.article_title['text']
-            if self._reference_record.monographic_title:
-                return self._reference_record.monographic_title['text']
+        if self.publication_type == "data":
+            return self._reference_record.article_title.get('text')
 
     @property
     def date(self):
@@ -181,6 +174,8 @@ class Reference:
     def publication_date(self):
         """
         This method retrieves the publication date, if it is exists.
+        Retorna outras datas no lugar para minimizar problemas de marcação
+        incorreta
         """
         return (
             self._reference_record.publication_date_iso or
@@ -188,3 +183,23 @@ class Reference:
             self._reference_record.conference_date_iso or
             self._reference_record.thesis_date_iso
         )
+
+    @property
+    def patent_application_date(self):
+        return self._reference_record.patent.get("date")
+
+    @property
+    def patent_application_date_iso(self):
+        return self._reference_record.patent.get("date_iso")
+
+    @property
+    def patent_country(self):
+        return self._reference_record.patent.get("country")
+
+    @property
+    def patent_organization(self):
+        return self._reference_record.patent.get("organization")
+
+    @property
+    def patent_id(self):
+        return self._reference_record.patent.get("id")
