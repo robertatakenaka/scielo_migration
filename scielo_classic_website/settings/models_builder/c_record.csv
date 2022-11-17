@@ -44,7 +44,8 @@ ref,28,serial_person_authors,,r,role,Monographic Author
 ref,28,serial_person_authors,,s,surname,Monographic Author
 ref,29,serial_corporative_authors,,_,name,Monographic Corporative Author
 ref,29,serial_corporative_authors,,d,division,Monographic Corporative Author
-ref,30,source,,,,Source
+ref,30,journal_title,,_,text,Journal title
+ref,30,journal_title,,l,language,Journal title
 ref,31,volume,,,,Volume
 ref,32,issue,,n,number,Issue
 ref,32,issue,,s,suppl,Issue
