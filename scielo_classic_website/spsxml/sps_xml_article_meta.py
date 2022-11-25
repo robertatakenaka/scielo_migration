@@ -634,3 +634,80 @@ class XMLArticleMetaCountsPipe(plumber.Pipe):
 
             frontstub.append(counts)
         return data
+
+
+class XMLSubArticlePipe(plumber.Pipe):
+
+    def precond(data):
+
+        raw, xml = data
+
+        if not raw.translated_htmls:
+            raise plumber.UnmetPrecondition()
+
+    @plumber.precondition(precond)
+    def transform(self, data):
+        raw, xml = data
+
+        for language, body in raw.translated_htmls.items():
+            subarticle = ET.Element('sub-article')
+            frontstub = ET.Element('front-stub')
+
+            # ARTICLE CATEGORY
+            if raw.section:
+                articlecategories = ET.Element('article-categories')
+                subjectgroup = ET.Element('subj-group')
+                subjectgroup.set('subj-group-type', 'heading')
+                sbj = ET.Element('subject')
+                sbj.text = raw.get_section(language)
+                subjectgroup.append(sbj)
+                articlecategories.append(subjectgroup)
+                frontstub.append(articlecategories)
+
+            # ARTICLE TITLE
+            if raw.translated_titles:
+                titlegroup = ET.Element('title-group')
+                articletitle = ET.Element('article-title')
+                articletitle.set(
+                    '{http://www.w3.org/XML/1998/namespace}lang', language)
+                articletitle.text = raw.get_article_title(language)
+                titlegroup.append(articletitle)
+                frontstub.append(titlegroup)
+
+            # ABSTRACT
+            if raw.translated_abstracts:
+                p = ET.Element('p')
+                p.text = raw.get_abstract(language)
+                abstract = ET.Element('abstract')
+                abstract.set(
+                    '{http://www.w3.org/XML/1998/namespace}lang', language)
+                abstract.append(p)
+                frontstub.append(abstract)
+
+            # KEYWORDS
+            if raw.keywords():
+                for lang, keywords in raw.keywords().items():
+                    if lang != language:
+                        continue
+                    kwd_group = ET.Element('kwd-group')
+                    kwd_group.set('{http://www.w3.org/XML/1998/namespace}lang', lang)
+                    for keyword in keywords:
+                        kwd = ET.Element('kwd')
+                        kwd.text = keyword
+                        kwd_group.append(kwd)
+                    frontstub.append(kwd_group)
+
+            subarticle.append(frontstub)
+            subarticle.set('article-type', 'translation')
+            subarticle.set('id', 'TR%s' % language)
+            subarticle.set('{http://www.w3.org/XML/1998/namespace}lang', language)
+            subarticle_body = ET.Element('body')
+            subarticle_body.set('specific-use', 'quirks-mode')
+            p = ET.Element('p')
+            p.text = body
+            subarticle_body.append(p)
+            subarticle.append(subarticle_body)
+            xml.append(subarticle)
+
+        return data
+

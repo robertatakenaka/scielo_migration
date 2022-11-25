@@ -944,4 +944,3 @@ class BaseReferenceRecord(RawRecord):
                     True
                 ))
         return self._etal
-

@@ -26,7 +26,7 @@ from scielo_classic_website.spsxml.sps_xml_article_meta import (
     XMLArticleMetaKeywordsPipe,
     XMLArticleMetaCountsPipe,
     # XMLBodyPipe,
-    # XMLSubArticlePipe,
+    XMLSubArticlePipe,
 )
 from scielo_classic_website.spsxml.sps_xml_refs import (
     XMLArticleMetaCitationsPipe,
@@ -78,7 +78,7 @@ def _process(document):
             XMLArticleMetaKeywordsPipe(),
             # XMLBodyPipe(),
             XMLArticleMetaCitationsPipe(),
-            # XMLSubArticlePipe(),
+            XMLSubArticlePipe(),
             XMLArticleMetaCountsPipe(),
             XMLClosePipe(),
 

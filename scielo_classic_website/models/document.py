@@ -118,6 +118,36 @@ class Document:
     def elocation(self):
         return self.page.get("elocation")
 
+    def get_section(self, lang):
+        if not hasattr(self, '_sections') and not self._sections:
+            self._sections = {}
+            for item in self.issue.get_sections(self.section_code):
+                self._sections[item['lang']] = item
+        try:
+            return self._sections[lang]['text']
+        except KeyError:
+            return None
+
+    def get_article_title(self, lang):
+        if not hasattr(self, '_article_titles') and not self._article_titles:
+            self._article_titles = {}
+            for item in self.translated_titles:
+                self._article_titles[item['lang']] = item
+        try:
+            return self._article_titles[lang]['text']
+        except KeyError:
+            return None
+
+    def get_abstract(self, lang):
+        if not hasattr(self, '_abstracts') and not self._abstracts:
+            self._abstracts = {}
+            for item in self.translated_abstracts:
+                self._abstracts[item['lang']] = item
+        try:
+            return self._abstracts[lang]['text']
+        except KeyError:
+            return None
+
     @property
     def translated_htmls(self):
         _translated_htmls = (self.data.get("body") or {}).copy()

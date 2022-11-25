@@ -168,6 +168,8 @@ class Reference:
             return self._reference_record.thesis_date_iso
         if self.publication_type == 'webpage':
             return self._reference_record.access_date_iso
+        if self.publication_type == 'patent':
+            return self.patent_application_date_iso
         return self._reference_record.conference_date_iso
 
     @property
@@ -179,9 +181,10 @@ class Reference:
         """
         return (
             self._reference_record.publication_date_iso or
-            self._reference_record.access_date_iso or
             self._reference_record.conference_date_iso or
-            self._reference_record.thesis_date_iso
+            self._reference_record.thesis_date_iso or
+            self.patent_application_date_iso or
+            self._reference_record.access_date_iso
         )
 
     @property
@@ -194,7 +197,8 @@ class Reference:
 
     @property
     def patent_country(self):
-        return self._reference_record.patent.get("country")
+        country = self._reference_record.patent.get("country")
+        return country if country != 'nd' else None
 
     @property
     def patent_organization(self):
