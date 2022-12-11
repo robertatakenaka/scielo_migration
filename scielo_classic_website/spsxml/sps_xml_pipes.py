@@ -25,7 +25,6 @@ from scielo_classic_website.spsxml.sps_xml_article_meta import (
     XMLArticleMetaAbstractsPipe,
     XMLArticleMetaKeywordsPipe,
     XMLArticleMetaCountsPipe,
-    # XMLBodyPipe,
 )
 from scielo_classic_website.spsxml.sps_xml_refs import (
     XMLArticleMetaCitationsPipe,
@@ -75,9 +74,9 @@ def _process(document):
             XMLArticleMetaSelfUriPipe(),
             XMLArticleMetaAbstractsPipe(),
             XMLArticleMetaKeywordsPipe(),
-            # XMLBodyPipe(),
-            XMLArticleMetaCitationsPipe(),
+            XMLBodyPipe(),
             XMLSubArticlePipe(),
+            XMLArticleMetaCitationsPipe(),
             XMLArticleMetaCountsPipe(),
             XMLClosePipe(),
 
@@ -243,6 +242,26 @@ class XMLJournalMetaPublisherPipe(plumber.Pipe):
         return data
 
 
+class XMLBodyPipe(plumber.Pipe):
+
+    def precond(data):
+
+        raw, xml = data
+
+        if not raw.main_xml_body:
+            raise plumber.UnmetPrecondition()
+
+    @plumber.precondition(precond)
+    def transform(self, data):
+        raw, xml = data
+
+        body = raw.main_xml_body
+        body.set('specific-use', 'quirks-mode')
+        xml.append(body)
+
+        return data
+
+
 class XMLSubArticlePipe(plumber.Pipe):
 
     def precond(data):
@@ -256,7 +275,7 @@ class XMLSubArticlePipe(plumber.Pipe):
     def transform(self, data):
         raw, xml = data
 
-        for language, body in raw.translated_htmls.items():
+        for language, body in raw.translated_xml_body_items.items():
             # SUB-ARTICLE
             subarticle = ET.Element('sub-article')
             subarticle.set('article-type', 'translation')
@@ -310,12 +329,10 @@ class XMLSubArticlePipe(plumber.Pipe):
             subarticle.append(frontstub)
 
             # SUB-ARTICLE BODY
-            subarticle_body = ET.Element('body')
-            subarticle_body.set('specific-use', 'quirks-mode')
-            p = ET.Element('p')
-            p.text = body
-            subarticle_body.append(p)
-            subarticle.append(subarticle_body)
-            xml.append(subarticle)
+            if body:
+                subarticle_body = body
+                subarticle_body.set('specific-use', 'quirks-mode')
+                subarticle.append(subarticle_body)
+                xml.append(subarticle)
 
         return data

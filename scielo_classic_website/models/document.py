@@ -75,6 +75,16 @@ class Document:
         raise AttributeError(f"Document.{name} does not exist")
 
     @property
+    def main_xml_body(self):
+        # xml body converted from htmlbody
+        return None
+
+    @property
+    def translated_xml_body_items(self):
+        # xml body converted from htmlbody
+        return {}
+
+    @property
     def journal(self):
         return self._journal
 
