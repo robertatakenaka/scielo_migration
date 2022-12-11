@@ -139,25 +139,21 @@ class XMLCitation(object):
             return data
 
     class MixedCitationPipe(plumber.Pipe):
-        def precond(data):
-            raw, xml = data
 
-            if not raw.mixed_citation:
-                raise plumber.UnmetPrecondition()
-
-        @plumber.precondition(precond)
         def transform(self, data):
             raw, xml = data
 
-            parser = ET.HTMLParser()
+            xml_body = raw.xml_body
 
-            mc = ET.parse(StringIO(raw.mixed_citation), parser)
-            mixed_citation = mc.find('body/p/.')
+            mixed_citation = raw.mixed_citation
             if mixed_citation is None:
-                mixed_citation = mc.find('body/.')
-            mixed_citation.tag = 'mixed-citation'
+                mixed_citation = xml_body.find(
+                    f'.//body/p[@ref="{raw.index_number}"]')
+                if mixed_citation is not None:
+                    mixed_citation.tag = "mixed-citation"
 
-            xml.append(utils.convert_all_html_tags_to_jats(mixed_citation))
+            if mixed_citation is not None:
+                xml.append(utils.convert_all_html_tags_to_jats(mixed_citation))
 
             return data
 

@@ -1,6 +1,7 @@
 import logging
 
 from scielo_classic_website.isisdb.c_record import ReferenceRecord
+from htmlbody import html_utils
 
 
 def html_decode(text):
@@ -207,3 +208,8 @@ class Reference:
     @property
     def patent_id(self):
         return self._reference_record.patent.get("id")
+
+    @property
+    def mixed_citation(self):
+        if self.paragraph_text:
+            return html_utils.get_mixed_citation_node(self.paragraph_text)
