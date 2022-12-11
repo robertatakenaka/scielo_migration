@@ -148,6 +148,14 @@ class Document:
         except KeyError:
             return None
 
+    def get_keywords_group(self, lang):
+        if not hasattr(self, '_keywords_groups') and not self._keywords_groups:
+            self._keywords_groups = self._h_record.keywords_groups
+        try:
+            return self._keywords_groups[lang]
+        except KeyError:
+            return None
+
     @property
     def translated_htmls(self):
         _translated_htmls = (self.data.get("body") or {}).copy()

@@ -76,8 +76,15 @@ class DocumentRecord(BaseDocumentRecord):
     def keywords_groups(self):
         _kwg = {}
         for item in self.keywords:
+            # item keys {'text', 'subkey', 'language'}
             if not item.get("language"):
                 continue
+
+            # add kwd
+            item['kwd'] = item['text']
+            if item.get("subkey"):
+                item['kwd'] += ", " + item['subkey']
+            # item keys {'text', 'subkey', 'language', 'kwd'}
             try:
                 _kwg[item['language']].append(item)
             except KeyError:
