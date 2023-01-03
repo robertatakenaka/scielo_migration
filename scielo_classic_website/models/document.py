@@ -9,6 +9,8 @@ from scielo_classic_website.models.html_body import (
     BodyFromISIS,
     BodyFromHTMLFile,
 )
+from scielo_classic_website.spsxml.sps_xml_pipes import get_xml_rsps
+from scielo_classic_website.spsxml import sps_xml_body_pipes
 
 
 RECORD = dict(
@@ -66,6 +68,7 @@ class Document:
             self._issue = Issue(data["issue"])
         except KeyError:
             self._issue = None
+        self.converted_html_body = None
 
     def __getattr__(self, name):
         # desta forma Document não precisa herdar de DocumentRecord
@@ -75,14 +78,58 @@ class Document:
         raise AttributeError(f"Document.{name} does not exist")
 
     @property
-    def main_xml_body(self):
-        # xml body converted from htmlbody
-        return None
+    def main_html_body_paragraphs(self):
+        # list of dict keys: part, text, index, reference_index
+        if self.document_records.get_record("p"):
+            return {
+                "before references": list(
+                    self.body_from_isis.before_references_items),
+                "references": list(
+                    self.body_from_isis.references_items),
+                "after references": list(
+                    self.body_from_isis.after_references_items),
+            }
 
     @property
-    def translated_xml_body_items(self):
-        # xml body converted from htmlbody
-        return {}
+    def translated_html_body_by_lang(self):
+        """
+        {
+            "en": {
+                "before references": html,
+                "after references": html,
+            },
+            "es": {
+                "before references": html,
+                "after references": html,
+            }
+        }
+        """
+        return self._translated_html_body_by_lang
+
+    def add_translated_html_body_by_lang(self, lang, before_references, after_references):
+        """
+        {
+            "en": {
+                "before references": html,
+                "after references": html,
+            },
+            "es": {
+                "before references": html,
+                "after references": html,
+            }
+        }
+        """
+        if not hasattr(self, '_translated_html_body_by_lang') or not self._translated_html_body_by_lang:
+            self._translated_html_body_by_lang = {}
+        self._translated_html_body_by_lang[lang] = {
+            "before references": before_references,
+            "after references": after_references,
+        }
+
+    def convert_html_body(self):
+        if self.main_html_body_paragraphs:
+            self.converted_html_body = sps_xml_body_pipes.convert_html_to_xml(self)
+            return self.converted_html_body
 
     @property
     def journal(self):
@@ -194,6 +241,10 @@ class Document:
     def citations(self):
         for record in self.document_records.get_record("c"):
             yield Reference(record)
+
+    def xml_from_html(self):
+        if self.document_records.get_record("p"):
+            return get_xml_rsps(self)
 
 
 class DocumentRecords:

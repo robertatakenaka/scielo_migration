@@ -1,15 +1,60 @@
+from io import StringIO
 
 import plumber
 from lxml import etree as ET
 
 
-def get_xml_body(xml_body):
+def convert_html_to_xml(document):
+    if document.converted_html_body:
+        xml = ET.fromstring(document.converted_html_body)
+        content_type = xml.find(".").get("content-type")
+        if content_type == "step-1":
+            return self.convert_html_to_xml_step_2(document)
+        if content_type == "step-2":
+            return self.convert_html_to_xml_step_3(document)
+    else:
+        return self.convert_html_to_xml_step_1(document)
+
+
+def set_step_value(xml):
+    step = xml.find(".").get("content-type")
+    if step:
+        step = int(step.split("-")[-1]) + 1
+    else:
+        step = "1"
+    xml.find(".").set("content-type", f"step-{step}")
+
+
+def convert_html_to_xml_step_1(document):
     """
-    Obtém XML
+    Coloca os textos HTML principal e traduções na estrutura do XML:
+    article/body, article/back/ref-list, article/back/sec,
+    sub-article/body, sub-article/back,
+    e inserindo o conteúdo em CDATA
 
     Parameters
     ----------
-    xml_body: etree
+    document: Document
+    """
+    ppl = plumber.Pipeline(
+            SetupPipe(),
+            MainHTMLPipe(),
+            TranslatedHTMLPipe(),
+            EndPipe(),
+    )
+    transformed_data = ppl.run(document, rewrap=True)
+    return next(transformed_data)
+
+
+def convert_html_to_xml_step_2(document):
+    """
+    Converte o XML obtido no passo 1,
+    remove o conteúdo de CDATA e converte as tags HTML nas XML correspondentes
+    sem preocupação em manter a hierarquia exigida no XML
+
+    Parameters
+    ----------
+    document: Document
 
     ((address | alternatives | answer | answer-set | array |
     block-alternatives | boxed-text | chem-struct-wrap | code | explanation |
@@ -20,6 +65,7 @@ def get_xml_body(xml_body):
     speech | statement | verse-group)*, (sec)*, sig-block?)
     """
     ppl = plumber.Pipeline(
+            RemoveCDATAPipe(),
             RemoveCommentPipe(),
             FontSymbolPipe(),
             RemoveTagsPipe(),
@@ -32,8 +78,73 @@ def get_xml_body(xml_body):
             AHrefPipe(),
             ANamePipe(),
             ImgSrcPipe(),
+            EndPipe(),
     )
-    transformed_data = ppl.run(xml_body, rewrap=True)
+    transformed_data = ppl.run(document, rewrap=True)
+    return next(transformed_data)
+
+
+def convert_html_to_xml_step_3(document):
+    """
+    Converte o XML obtido no passo 2.
+    Localiza os xref e os graphics e adiciona, respectivamente, ref-type e
+    os elementos fig, table-wrap, disp-formula, de acordo como o nome / local.
+
+    Parameters
+    ----------
+    document: Document
+
+    ((address | alternatives | answer | answer-set | array |
+    block-alternatives | boxed-text | chem-struct-wrap | code | explanation |
+    fig | fig-group | graphic | media | preformat | question | question-wrap |
+    question-wrap-group | supplementary-material | table-wrap |
+    table-wrap-group | disp-formula | disp-formula-group | def-list | list |
+    tex-math | mml:math | p | related-article | related-object | disp-quote |
+    speech | statement | verse-group)*, (sec)*, sig-block?)
+    """
+    ppl = plumber.Pipeline(
+            StartPipe(),
+            RemoveCommentPipe(),
+            FontSymbolPipe(),
+            RemoveTagsPipe(),
+            RenameElementsPipe(),
+            StylePipe(),
+            OlPipe(),
+            UlPipe(),
+            TagsHPipe(),
+            ASourcePipe(),
+            AHrefPipe(),
+            ANamePipe(),
+            ImgSrcPipe(),
+            EndPipe(),
+    )
+    transformed_data = ppl.run(document, rewrap=True)
+    return next(transformed_data)
+
+
+def convert_html_to_xml_step_3(document):
+    """
+    Converte o XML obtido no passo 2,
+    remove o conteúdo de CDATA e converte as tags HTML nas XML correspondentes
+    sem preocupação em manter a hierarquia exigida no XML
+
+    Parameters
+    ----------
+    document: Document
+
+    ((address | alternatives | answer | answer-set | array |
+    block-alternatives | boxed-text | chem-struct-wrap | code | explanation |
+    fig | fig-group | graphic | media | preformat | question | question-wrap |
+    question-wrap-group | supplementary-material | table-wrap |
+    table-wrap-group | disp-formula | disp-formula-group | def-list | list |
+    tex-math | mml:math | p | related-article | related-object | disp-quote |
+    speech | statement | verse-group)*, (sec)*, sig-block?)
+    """
+    ppl = plumber.Pipeline(
+            StartPipe(),
+            EndPipe(),
+    )
+    transformed_data = ppl.run(document, rewrap=True)
     return next(transformed_data)
 
 
@@ -42,8 +153,141 @@ def _process(xml, tag, func):
     for node in nodes:
         func(node)
 
+
+class StartPipe(plumber.Pipe):
+
+    def transform(self, data):
+        document = data
+        xml = ET.fromstring(document.converted_html_body)
+        set_step_value(xml)
+        return data, xml
+
+
+class SetupPipe(plumber.Pipe):
+
+    def precond(data):
+
+        raw = data
+        if not raw.get_record("p"):
+            raise plumber.UnmetPrecondition()
+
+    @plumber.precondition(precond)
+    def transform(self, data):
+
+        nsmap = {
+            'xml': 'http://www.w3.org/XML/1998/namespace',
+            'xlink': 'http://www.w3.org/1999/xlink'
+        }
+
+        xml = ET.Element('article', nsmap=nsmap)
+        body = ET.Element('body')
+        back = ET.Element('back')
+        xml.append(body)
+        xml.append(back)
+        return data, xml
+
+
+class EndPipe(plumber.Pipe):
+    def transform(self, data):
+        raw, xml = data
+
+        set_step_value(xml)
+        data = ET.tostring(
+            xml,
+            encoding="utf-8",
+            method="xml",
+            )
+        return data
+
+
+class MainHTMLPipe(plumber.Pipe):
+
+    def transform(self, data):
+        raw, xml = data
+
+        body = xml.find("body")
+        for item in raw.main_html_body_paragraphs['before references'] or []:
+            # TODO keys: text, index, reference_index, part
+            p = ET.Element("p")
+            p.text = ET.CDATA(item['text'])
+            body.append(p)
+
+        references = ET.Element("ref-list")
+        for item in raw.main_html_body_paragraphs['references'] or []:
+            # TODO keys: text, index, reference_index, part
+            ref = ET.Element("ref")
+            ref.set("id", f"B{item['reference_index']}")
+            mixed_citation = ET.Element('mixed-citation')
+            mixed_citation.text = ET.CDATA(item['text'])
+            ref.append(mixed_citation)
+            references.append(ref)
+
+        back = xml.find(".//back")
+        back.append(references)
+        for item in raw.main_html_body_paragraphs['after references'] or []:
+            # TODO keys: text, index, reference_index, part
+
+            # (ack | app-group | bio | fn-group | glossary | notes | sec)
+            # uso de sec por ser mais genérico
+            sec = ET.Element("sec")
+            sec.text = ET.CDATA(item['text'])
+            back.append(sec)
+
+        return data
+
+
+class TranslatedHTMLPipe(plumber.Pipe):
+
+    def transform(self, data):
+        raw, xml = data
+
+        back = xml.find(".//back")
+        for lang, texts in raw.translated_html_body_by_lang.items():
+            sub_article = ET.Element("sub-article")
+            sub_article.set('article-type', "translation")
+            sub_article.set('{http://www.w3.org/XML/1998/namespace}lang', lang)
+            back.append(sub_article)
+
+            body = ET.Element('body')
+            body.text = ET.CDATA(texts['before references'])
+            sub_article.append(body)
+
+            if texts['after references']:
+                back = ET.Element('back')
+                back.text = ET.CDATA(texts['after references'])
+                sub_article.append(back)
+
+        return data
+
 ##############################################################################
-# Remove items
+
+
+def html_body_tree(html_text):
+    # html_text = "<html><head><title>test<body><h1>page title</h3>"
+    parser = ET.HTMLParser()
+    h = ET.parse(StringIO(html_text), parser)
+    return h.find(".//body")
+
+
+def remove_CDATA(old):
+    new = html_body_tree(old.text)
+    new.tag = old.tag
+    for name, value in old.attrb.items():
+        new.set(name, value)
+    parent = old.getparent()
+    parent.replace(old, new)
+
+
+class RemoveCDATAPipe(plumber.Pipe):
+
+    def transform(self, data):
+        raw = data
+        xml = ET.fromstring(raw.converted_html_body)
+        for item in xml.findall(".//*"):
+            if not item.getchildren() and item.text:
+                remove_CDATA(item)
+        return raw, xml
+
 
 class RemoveCommentPipe(plumber.Pipe):
     def transform(self, data):

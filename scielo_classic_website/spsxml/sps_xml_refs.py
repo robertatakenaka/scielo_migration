@@ -54,21 +54,34 @@ class XMLArticleMetaCitationsPipe(plumber.Pipe):
         raw, xml = data
 
         article = xml.find('.')
-        article.append(ET.Element('back'))
-
         back = article.find('back')
-        back.append(ET.Element('ref-list'))
+        if back is None:
+            back = ET.Element('back')
+            article.append(back)
 
         reflist = xml.find('./back/ref-list')
+        if reflist is None:
+            reflist = ET.Element('ref-list')
+            back.append(reflist)
+
+        refs = ET.Element("ref-list")
 
         cit = XMLCitation()
         for citation in raw.citations:
             # citation (scielo_classic_website.models.reference.Reference)
-            reflist.append(
-                cit.deploy(
+            ref = cit.deploy(
                     xylose_adapters.ReferenceXyloseAdapter(
-                        citation, html_decode))[1])
-
+                        citation, html_decode))[1]
+            if ref is not None:
+                if ref.find(".//mixed-citation") is None:
+                    ref_id = ref.get("id")
+                    r = reflist.find(f".//ref[@id='{ref_id}']")
+                    if r is not None:
+                        mixed_citation = r.find(".//mixed-citation")
+                        if mixed_citation is not None:
+                            ref.insert(0, mixed_citation)
+                refs.append(ref)
+        back.replace(reflist, refs)
         return data
 
 
@@ -142,16 +155,7 @@ class XMLCitation(object):
 
         def transform(self, data):
             raw, xml = data
-
-            xml_body = raw.xml_body
-
             mixed_citation = raw.mixed_citation
-            if mixed_citation is None:
-                mixed_citation = xml_body.find(
-                    f'.//body/p[@ref="{raw.index_number}"]')
-                if mixed_citation is not None:
-                    mixed_citation.tag = "mixed-citation"
-
             if mixed_citation is not None:
                 xml.append(utils.convert_all_html_tags_to_jats(mixed_citation))
 

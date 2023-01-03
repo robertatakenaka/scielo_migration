@@ -1,3 +1,4 @@
+from copy import deepcopy
 
 import plumber
 from lxml import etree as ET
@@ -6,7 +7,6 @@ from scielo_classic_website.spsxml.sps_xml_attributes import (
     ARTICLE_TYPES,
     COUNTRY_ITEMS,
 )
-
 from scielo_classic_website.spsxml.sps_xml_article_meta import (
     XMLArticleMetaSciELOArticleIdPipe,
     XMLArticleMetaArticleIdDOIPipe,
@@ -75,8 +75,9 @@ def _process(document):
             XMLArticleMetaAbstractsPipe(),
             XMLArticleMetaKeywordsPipe(),
             XMLBodyPipe(),
-            XMLSubArticlePipe(),
+            XMLBackPipe(),
             XMLArticleMetaCitationsPipe(),
+            XMLSubArticlePipe(),
             XMLArticleMetaCountsPipe(),
             XMLClosePipe(),
 
@@ -248,17 +249,37 @@ class XMLBodyPipe(plumber.Pipe):
 
         raw, xml = data
 
-        if not raw.main_xml_body:
+        if not raw.converted_html_body:
             raise plumber.UnmetPrecondition()
 
     @plumber.precondition(precond)
     def transform(self, data):
         raw, xml = data
 
-        body = raw.main_xml_body
+        converted_html_body = ET.fromstring(raw.converted_html_body)
+        body = deepcopy(converted_html_body.find(".//body"))
         body.set('specific-use', 'quirks-mode')
         xml.append(body)
+        return data
 
+
+class XMLBackPipe(plumber.Pipe):
+
+    def precond(data):
+
+        raw, xml = data
+
+        if not raw.converted_html_body:
+            raise plumber.UnmetPrecondition()
+
+    @plumber.precondition(precond)
+    def transform(self, data):
+        raw, xml = data
+
+        converted_html_body = ET.fromstring(raw.converted_html_body)
+        back = converted_html_body.find(".//back")
+        if back is not None:
+            xml.append(deepcopy(back))
         return data
 
 
@@ -275,7 +296,7 @@ class XMLSubArticlePipe(plumber.Pipe):
     def transform(self, data):
         raw, xml = data
 
-        for language, body in raw.translated_xml_body_items.items():
+        for language, texts in raw.translated_xml_body_items.items():
             # SUB-ARTICLE
             subarticle = ET.Element('sub-article')
             subarticle.set('article-type', 'translation')
@@ -328,11 +349,18 @@ class XMLSubArticlePipe(plumber.Pipe):
                 frontstub.append(kwd_group)
             subarticle.append(frontstub)
 
-            # SUB-ARTICLE BODY
+            # SUB-ARTICLE BODY e BACK
+            body = texts['before references']
             if body:
-                subarticle_body = body
+                subarticle_body = deepcopy(ET.fromstring(body))
                 subarticle_body.set('specific-use', 'quirks-mode')
                 subarticle.append(subarticle_body)
+                xml.append(subarticle)
+
+            back = texts['after references']
+            if back:
+                subarticle_back = deepcopy(ET.fromstring(back))
+                subarticle.append(subarticle_back)
                 xml.append(subarticle)
 
         return data
