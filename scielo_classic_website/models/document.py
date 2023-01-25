@@ -68,7 +68,7 @@ class Document:
             self._issue = Issue(data["issue"])
         except KeyError:
             self._issue = None
-        self.converted_html_body = None
+        self.xml_from_html = None
 
     def __getattr__(self, name):
         # desta forma Document não precisa herdar de DocumentRecord
@@ -78,7 +78,7 @@ class Document:
         raise AttributeError(f"Document.{name} does not exist")
 
     @property
-    def main_html_body_paragraphs(self):
+    def main_html_paragraphs(self):
         # list of dict keys: part, text, index, reference_index
         if self.document_records.get_record("p"):
             return {
@@ -91,7 +91,7 @@ class Document:
             }
 
     @property
-    def translated_html_body_by_lang(self):
+    def translated_html_by_lang(self):
         """
         {
             "en": {
@@ -104,9 +104,9 @@ class Document:
             }
         }
         """
-        return self._translated_html_body_by_lang
+        return self._translated_html_by_lang
 
-    def add_translated_html_body_by_lang(self, lang, before_references, after_references):
+    def add_translated_html(self, lang, before_references, after_references):
         """
         {
             "en": {
@@ -119,17 +119,12 @@ class Document:
             }
         }
         """
-        if not hasattr(self, '_translated_html_body_by_lang') or not self._translated_html_body_by_lang:
-            self._translated_html_body_by_lang = {}
-        self._translated_html_body_by_lang[lang] = {
+        if not hasattr(self, '_translated_html_by_lang') or not self._translated_html_by_lang:
+            self._translated_html_by_lang = {}
+        self._translated_html_by_lang[lang] = {
             "before references": before_references,
             "after references": after_references,
         }
-
-    def convert_html_body(self):
-        if self.main_html_body_paragraphs:
-            self.converted_html_body = sps_xml_body_pipes.convert_html_to_xml(self)
-            return self.converted_html_body
 
     @property
     def journal(self):
@@ -242,9 +237,45 @@ class Document:
         for record in self.document_records.get_record("c"):
             yield Reference(record)
 
-    def xml_from_html(self):
-        if self.document_records.get_record("p"):
-            return get_xml_rsps(self)
+    def generate_body_and_back_from_html(self, html_texts=None):
+        """
+        Parameters
+        ----------
+        html_texts : {
+            lang: {
+                "before references": before,
+                "after references": after,
+                }
+            }
+        """
+        if not self.main_html_paragraphs:
+            return
+        langs = {}
+        # obtém os textos html
+        html_texts = html_texts or {}
+        for lang, html_text in html_texts.items():
+            document.add_translated_html(
+                lang,
+                html_text['before references'],
+                html_text['after references']
+            )
+        return sps_xml_body_pipes.generate_body_and_back_from_html(self)
+
+    def generate_full_xml(self, selected_xml_body=None):
+        """
+        Parameters
+        ----------
+        html_texts : {
+            lang: {
+                "before references": before,
+                "after references": after,
+                }
+            }
+        """
+        if not self.main_html_paragraphs:
+            return
+        self.xml_body = selected_xml_body
+        return get_xml_rsps(self)
 
 
 class DocumentRecords:

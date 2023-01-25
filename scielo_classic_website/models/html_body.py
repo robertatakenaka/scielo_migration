@@ -15,6 +15,7 @@ class BodyFromISIS:
     @property
     def before_references_items(self):
         for item in self.before_references_paragraphs:
+            # record_type_index, text, record_type, reference_index
             data = item.data
             data['part'] = 'before references'
             yield data
@@ -22,6 +23,7 @@ class BodyFromISIS:
     @property
     def reference_items(self):
         for item in self.reference_paragraphs:
+            # record_type_index, text, record_type, reference_index
             data = item.data
             data['part'] = 'reference'
             yield data
@@ -29,6 +31,7 @@ class BodyFromISIS:
     @property
     def after_references_items(self):
         for item in self.after_references_paragraphs:
+            # record_type_index, text, record_type, reference_index
             data = item.data
             data['part'] = 'after references'
             yield data

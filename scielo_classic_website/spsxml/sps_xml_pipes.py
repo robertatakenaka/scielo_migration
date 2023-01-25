@@ -249,14 +249,14 @@ class XMLBodyPipe(plumber.Pipe):
 
         raw, xml = data
 
-        if not raw.converted_html_body:
+        if not raw.xml_body:
             raise plumber.UnmetPrecondition()
 
     @plumber.precondition(precond)
     def transform(self, data):
         raw, xml = data
 
-        converted_html_body = ET.fromstring(raw.converted_html_body)
+        converted_html_body = ET.fromstring(raw.xml_body[-1])
         body = deepcopy(converted_html_body.find(".//body"))
         body.set('specific-use', 'quirks-mode')
         xml.append(body)
@@ -276,7 +276,7 @@ class XMLBackPipe(plumber.Pipe):
     def transform(self, data):
         raw, xml = data
 
-        converted_html_body = ET.fromstring(raw.converted_html_body)
+        converted_html_body = ET.fromstring(raw.xml_body[-1])
         back = converted_html_body.find(".//back")
         if back is not None:
             xml.append(deepcopy(back))
@@ -289,19 +289,19 @@ class XMLSubArticlePipe(plumber.Pipe):
 
         raw, xml = data
 
-        if not raw.translated_htmls:
+        if not raw.xml_body:
             raise plumber.UnmetPrecondition()
 
     @plumber.precondition(precond)
     def transform(self, data):
         raw, xml = data
 
-        for language, texts in raw.translated_xml_body_items.items():
-            # SUB-ARTICLE
-            subarticle = ET.Element('sub-article')
-            subarticle.set('article-type', 'translation')
-            subarticle.set('id', 'TR%s' % language)
-            subarticle.set('{http://www.w3.org/XML/1998/namespace}lang', language)
+        converted_html_body = ET.fromstring(raw.xml_body[-1])
+        for subart in converted_html_body.findall(".//sub-article"):
+            subarticle = deepcopy(subart)
+            xml.append(subarticle)
+
+            language = subarticle.get('{http://www.w3.org/XML/1998/namespace}lang')
 
             # FRONT STUB
             frontstub = ET.Element('front-stub')
@@ -348,19 +348,4 @@ class XMLSubArticlePipe(plumber.Pipe):
                     kwd_group.append(kwd)
                 frontstub.append(kwd_group)
             subarticle.append(frontstub)
-
-            # SUB-ARTICLE BODY e BACK
-            body = texts['before references']
-            if body:
-                subarticle_body = deepcopy(ET.fromstring(body))
-                subarticle_body.set('specific-use', 'quirks-mode')
-                subarticle.append(subarticle_body)
-                xml.append(subarticle)
-
-            back = texts['after references']
-            if back:
-                subarticle_back = deepcopy(ET.fromstring(back))
-                subarticle.append(subarticle_back)
-                xml.append(subarticle)
-
         return data

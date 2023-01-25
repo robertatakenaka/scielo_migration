@@ -5,24 +5,9 @@ from lxml import etree as ET
 
 
 def convert_html_to_xml(document):
-    if document.converted_html_body:
-        xml = ET.fromstring(document.converted_html_body)
-        content_type = xml.find(".").get("content-type")
-        if content_type == "step-1":
-            return self.convert_html_to_xml_step_2(document)
-        if content_type == "step-2":
-            return self.convert_html_to_xml_step_3(document)
-    else:
-        return self.convert_html_to_xml_step_1(document)
-
-
-def set_step_value(xml):
-    step = xml.find(".").get("content-type")
-    if step:
-        step = int(step.split("-")[-1]) + 1
-    else:
-        step = "1"
-    xml.find(".").set("content-type", f"step-{step}")
+    yield self.convert_html_to_xml_step_1(document)
+    yield self.convert_html_to_xml_step_2(document)
+    yield self.convert_html_to_xml_step_3(document)
 
 
 def convert_html_to_xml_step_1(document):
@@ -65,6 +50,7 @@ def convert_html_to_xml_step_2(document):
     speech | statement | verse-group)*, (sec)*, sig-block?)
     """
     ppl = plumber.Pipeline(
+            StartPipe(),
             RemoveCDATAPipe(),
             RemoveCommentPipe(),
             FontSymbolPipe(),
@@ -158,8 +144,7 @@ class StartPipe(plumber.Pipe):
 
     def transform(self, data):
         document = data
-        xml = ET.fromstring(document.converted_html_body)
-        set_step_value(xml)
+        xml = ET.fromstring(document.xml_body)
         return data, xml
 
 
@@ -213,10 +198,14 @@ class MainHTMLPipe(plumber.Pipe):
             body.append(p)
 
         references = ET.Element("ref-list")
-        for item in raw.main_html_body_paragraphs['references'] or []:
+        for i, item in enumerate(raw.main_html_body_paragraphs['references'] or []):
             # TODO keys: text, index, reference_index, part
             ref = ET.Element("ref")
-            ref.set("id", f"B{item['reference_index']}")
+            try:
+                ref_index = item['reference_index']
+            except KeyError:
+                ref_index = i + 1
+            ref.set("id", f"B{ref_index}")
             mixed_citation = ET.Element('mixed-citation')
             mixed_citation.text = ET.CDATA(item['text'])
             ref.append(mixed_citation)
@@ -242,7 +231,7 @@ class TranslatedHTMLPipe(plumber.Pipe):
         raw, xml = data
 
         back = xml.find(".//back")
-        for lang, texts in raw.translated_html_body_by_lang.items():
+        for lang, texts in raw.translated_html_by_lang.items():
             sub_article = ET.Element("sub-article")
             sub_article.set('article-type', "translation")
             sub_article.set('{http://www.w3.org/XML/1998/namespace}lang', lang)
