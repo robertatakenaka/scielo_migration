@@ -1,6 +1,7 @@
 import logging
 
-from scielo_classic_website.htmlbody.html_body import BodyFromHTMLFile, BodyFromISIS
+from scielo_classic_website.htmlbody.html_body import (BodyFromHTMLFile,
+                                                       BodyFromISIS)
 from scielo_classic_website.isisdb.c_record import ReferenceRecord
 from scielo_classic_website.isisdb.h_record import DocumentRecord
 from scielo_classic_website.isisdb.meta_record import MetaRecord

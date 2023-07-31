@@ -5,29 +5,19 @@ import plumber
 from lxml import etree as ET
 
 from scielo_classic_website.spsxml.sps_xml_article_meta import (
-    XMLArticleMetaAbstractsPipe,
-    XMLArticleMetaAffiliationPipe,
-    XMLArticleMetaArticleCategoriesPipe,
-    XMLArticleMetaArticleIdDOIPipe,
-    XMLArticleMetaContribGroupPipe,
-    XMLArticleMetaCountsPipe,
-    XMLArticleMetaElocationInfoPipe,
-    XMLArticleMetaHistoryPipe,
-    XMLArticleMetaIssueInfoPipe,
-    XMLArticleMetaKeywordsPipe,
-    XMLArticleMetaPagesInfoPipe,
-    XMLArticleMetaPermissionPipe,
-    XMLArticleMetaPublicationDatesPipe,
-    XMLArticleMetaSciELOArticleIdPipe,
-    XMLArticleMetaSelfUriPipe,
-    XMLArticleMetaTitleGroupPipe,
-    XMLArticleMetaTranslatedTitleGroupPipe,
-)
-from scielo_classic_website.spsxml.sps_xml_attributes import (
-    ARTICLE_TYPES,
-    COUNTRY_ITEMS,
-)
-from scielo_classic_website.spsxml.sps_xml_refs import XMLArticleMetaCitationsPipe
+    XMLArticleMetaAbstractsPipe, XMLArticleMetaAffiliationPipe,
+    XMLArticleMetaArticleCategoriesPipe, XMLArticleMetaArticleIdDOIPipe,
+    XMLArticleMetaContribGroupPipe, XMLArticleMetaCountsPipe,
+    XMLArticleMetaElocationInfoPipe, XMLArticleMetaHistoryPipe,
+    XMLArticleMetaIssueInfoPipe, XMLArticleMetaKeywordsPipe,
+    XMLArticleMetaPagesInfoPipe, XMLArticleMetaPermissionPipe,
+    XMLArticleMetaPublicationDatesPipe, XMLArticleMetaSciELOArticleIdPipe,
+    XMLArticleMetaSelfUriPipe, XMLArticleMetaTitleGroupPipe,
+    XMLArticleMetaTranslatedTitleGroupPipe)
+from scielo_classic_website.spsxml.sps_xml_attributes import (ARTICLE_TYPES,
+                                                              COUNTRY_ITEMS)
+from scielo_classic_website.spsxml.sps_xml_refs import \
+    XMLArticleMetaCitationsPipe
 
 
 def get_xml_rsps(document):

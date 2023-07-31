@@ -3,33 +3,14 @@ from unittest import TestCase
 from lxml import etree
 
 from scielo_classic_website.spsxml.sps_xml_body_pipes import (
-    AHrefPipe,
-    AlternativesGraphicPipe,
-    ANamePipe,
-    ASourcePipe,
-    DivIdToTableWrap,
-    EndPipe,
-    FigPipe,
-    FontSymbolPipe,
-    ImgSrcPipe,
-    InlineGraphicPipe,
-    InsertCaptionAndTitleInTableWrapPipe,
-    InsertGraphicInTableWrapPipe,
-    InsertTableWrapFootInTableWrapPipe,
-    MainHTMLPipe,
-    OlPipe,
-    RemoveCDATAPipe,
-    RemoveCommentPipe,
-    RemoveEmptyPTagPipe,
-    RemoveParentPTagOfGraphicPipe,
-    RemoveTagsPipe,
-    RenameElementsPipe,
-    StylePipe,
-    TagsHPipe,
-    TranslatedHTMLPipe,
-    UlPipe,
-    XRefTypePipe,
-)
+    AHrefPipe, AlternativesGraphicPipe, ANamePipe, ASourcePipe,
+    DivIdToTableWrap, EndPipe, FigPipe, FontSymbolPipe, ImgSrcPipe,
+    InlineGraphicPipe, InsertCaptionAndTitleInTableWrapPipe,
+    InsertGraphicInTableWrapPipe, InsertTableWrapFootInTableWrapPipe,
+    MainHTMLPipe, OlPipe, RemoveCDATAPipe, RemoveCommentPipe,
+    RemoveEmptyPTagPipe, RemoveParentPTagOfGraphicPipe, RemoveTagsPipe,
+    RenameElementsPipe, StylePipe, TagsHPipe, TranslatedHTMLPipe, UlPipe,
+    XRefTypePipe)
 
 
 def get_tree(xml_str):

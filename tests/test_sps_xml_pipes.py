@@ -3,11 +3,9 @@ from unittest import TestCase
 from lxml import etree
 
 from scielo_classic_website.models.document import Document
-from scielo_classic_website.spsxml.sps_xml_pipes import (
-    SetupArticlePipe,
-    XMLClosePipe,
-    get_xml_rsps,
-)
+from scielo_classic_website.spsxml.sps_xml_pipes import (SetupArticlePipe,
+                                                         XMLClosePipe,
+                                                         get_xml_rsps)
 
 
 def get_tree(xml_str):

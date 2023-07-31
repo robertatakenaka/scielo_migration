@@ -4,12 +4,9 @@ CISIS COMMANDS
 import os
 
 from scielo_classic_website import config, exceptions
-from scielo_classic_website.utils.files_utils import (
-    create_temp_file,
-    date_now_as_folder_name,
-    read_file,
-    write_file,
-)
+from scielo_classic_website.utils.files_utils import (create_temp_file,
+                                                      date_now_as_folder_name,
+                                                      read_file, write_file)
 
 
 def get_document_isis_db(pid):

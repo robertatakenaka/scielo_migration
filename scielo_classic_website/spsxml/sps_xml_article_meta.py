@@ -2,9 +2,7 @@ import plumber
 from lxml import etree as ET
 
 from scielo_classic_website.spsxml.sps_xml_attributes import (
-    CONTRIB_ROLES,
-    get_attribute_value,
-)
+    CONTRIB_ROLES, get_attribute_value)
 
 
 def _create_date_element(element_name, attributes, date_text):
