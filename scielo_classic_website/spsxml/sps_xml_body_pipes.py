@@ -13,14 +13,14 @@ from scielo_classic_website.htmlbody.html_body import HTMLContent
 from scielo_classic_website.spsxml.sps_xml_article_meta import XMLNormalizeSpacePipe
 from scielo_classic_website.utils.body_sec_type_matcher import get_sectype
 from scielo_classic_website.htmlbody.name2number import fix_pre_loading
-from scielo_migration.scielo_classic_website.spsxml.detector import (
+from scielo_classic_website.spsxml.detector import (
     analyze_xref,
     detect_from_text,
 )
-from scielo_migration.scielo_classic_website.htmlbody.html_embedder import (
+from scielo_classic_website.htmlbody.html_embedder import (
     get_html_to_embed,
 )
-from scielo_migration.scielo_classic_website.spsxml.detector_config_xref import (
+from scielo_classic_website.spsxml.detector_config_xref import (
     ASSET_TYPE_CONFIG,
 )
 
