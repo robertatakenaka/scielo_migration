@@ -251,7 +251,8 @@ class TestArtigoIdFileWithIRecordInsideDocument(IdFileTestBase):
                 ("S0044-59672019000300001", "document", 4),
                 ("0044-596720190003", "issue", 1),
                 ("0044-596720190004", "issue", 1),
-                ("S0044-59672019000400001", "document", 1),
+                # só registro "o" (sem "h"): documento incompleto
+                ("S0044-59672019000400001", "broken", 1),
             ],
             result,
         )
@@ -283,6 +284,9 @@ class TestArtigoExternalPRecords(TestCase):
 !v880!S0044-59672019000300002
 !v091!20191005
 !ID 0000004
+!v706!h
+!v880!S0044-59672019000300002
+!ID 0000005
 !v706!p
 !v880!S0044-59672019000300002
 !v704!paragrafo interno
@@ -396,7 +400,8 @@ class TestArtigoRealFileQuirks(IdFileTestBase):
         result = [(i.pid, i.kind, len(i.records)) for i in self.id_file.items()]
         self.assertEqual(
             [
-                ("S0074-02761997000200008", "document", 1),
+                # "o" solto, sem "h": documento incompleto
+                ("S0074-02761997000200008", "broken", 1),
                 ("0074-027619970002", "issue", 1),
                 ("S0074-02761997000200008", "document", 3),
             ],
@@ -409,6 +414,172 @@ class TestArtigoRealFileQuirks(IdFileTestBase):
         item = self.id_file.get("S0074-02761997000200008")
         self.assertEqual(3, len(item.records))
         self.assertEqual("19981020", item.date)
+
+
+class TestArtigoDocumentRequiresOAndHRecords(IdFileTestBase):
+    content = """!ID 0000001
+!v706!o
+!v880!S0044-59672019000300001
+!v091!20191005
+!ID 0000002
+!v706!h
+!v880!S0044-59672019000300001
+!ID 0000003
+!v706!f
+!v880!S0044-59672019000300001
+!ID 0000004
+!v706!o
+!v880!S0044-59672019000300002
+!v091!20191005
+!ID 0000005
+!v706!f
+!v880!S0044-59672019000300002
+!ID 0000006
+!v706!h
+!v880!S0044-59672019000300003
+!ID 0000007
+!v706!f
+!v880!S0044-59672019000300003
+!ID 0000008
+!v706!o
+!v880!S0044-59672019000300004
+!v091!20191005
+!ID 0000009
+!v706!h
+!v880!S0044-59672019000300004
+"""
+    db_type = "artigo"
+
+    def test_kind(self):
+        result = [(i.pid, i.kind, i.record_types) for i in self.id_file.items()]
+        self.assertEqual(
+            [
+                ("S0044-59672019000300001", "document", ("o", "h", "f")),
+                # sem "h"
+                ("S0044-59672019000300002", "broken", ("o", "f")),
+                # sem "o"
+                ("S0044-59672019000300003", "broken", ("h", "f")),
+                # "o" e "h" bastam (f, p, c... não são verificados)
+                ("S0044-59672019000300004", "document", ("o", "h")),
+            ],
+            result,
+        )
+
+    def test_filter_by_kind_document(self):
+        self.assertEqual(
+            ["S0044-59672019000300001", "S0044-59672019000300004"],
+            list(self.id_file.pids(kind="document")),
+        )
+
+    def test_broken_batch_does_not_read_external_p_records(self):
+        # arquivos p externos existem para o documento válido (00001) e para
+        # o lote quebrado "o", "f" (00002); só o documento deve usá-los
+        with tempfile.TemporaryDirectory() as bases:
+            p_dir = os.path.join(bases, "artigo", "p", "0044-5967", "2019", "0003")
+            os.makedirs(p_dir)
+            for number in ("00001", "00002"):
+                with open(os.path.join(p_dir, f"{number}.id"), "w") as fp:
+                    fp.write(
+                        f"!ID 0000001\n!v706!p\n"
+                        f"!v880!S0044-596720190003{number}\n!v704!paragrafo\n"
+                    )
+            id_file = ClassicIdFile(
+                "artigo", self.path, p_records_base_paths=[bases]
+            )
+
+            document = id_file.get("S0044-59672019000300001")
+            self.assertEqual("document", document.kind)
+            self.assertEqual(
+                os.path.join(p_dir, "00001.id"), document.external_p_records_path
+            )
+            self.assertEqual(1, len(document.p_records))
+
+            broken = id_file.get("S0044-59672019000300002")
+            self.assertEqual("broken", broken.kind)
+            self.assertEqual("o", broken.record_type)
+            self.assertIsNone(broken.external_p_records_path)
+            self.assertEqual([], broken.external_p_records)
+            self.assertEqual([], broken.p_records)
+
+
+class TestArtigoBatchesFollowRecordTypesOrder(IdFileTestBase):
+    # mesmo PID em todos os registros: só a ordem dos tipos separa os lotes
+    content = """!ID 0000001
+!v706!o
+!v880!S0044-59672019000300001
+!v091!20191005
+!ID 0000002
+!v706!h
+!v880!S0044-59672019000300001
+!ID 0000003
+!v706!f
+!v880!S0044-59672019000300001
+!ID 0000004
+!v706!c
+!v880!S0044-5967201900030000100001
+!ID 0000005
+!v706!c
+!v880!S0044-5967201900030000100002
+!ID 0000006
+!v706!h
+!v880!S0044-59672019000300001
+!ID 0000007
+!v706!f
+!v880!S0044-59672019000300001
+!ID 0000008
+!v706!o
+!v880!S0044-59672019000300001
+!v091!20191010
+!ID 0000009
+!v706!o
+!v880!S0044-59672019000300001
+!v091!20191011
+!ID 0000010
+!v706!h
+!v880!S0044-59672019000300001
+!ID 0000011
+!v706!h
+!v880!S0044-59672019000300001
+"""
+    db_type = "artigo"
+
+    def test_batches(self):
+        result = [
+            (i.mfn, i.last_mfn, i.kind, "".join(i.record_types))
+            for i in self.id_file.items()
+        ]
+        self.assertEqual(
+            [
+                (1, 5, "document", "ohfcc"),
+                # "h" depois de "c": a ordem se inverte
+                (6, 7, "broken", "hf"),
+                # "o" depois de "f"
+                (8, 8, "broken", "o"),
+                # "o" depois de "o"
+                (9, 10, "document", "oh"),
+                # "h" não se repete
+                (11, 11, "broken", "h"),
+            ],
+            result,
+        )
+
+    def test_broken_batches(self):
+        self.assertEqual(
+            [(6, "hf"), (8, "o"), (11, "h")],
+            [
+                (i.mfn, "".join(i.record_types))
+                for i in self.id_file.broken_batches()
+            ],
+        )
+
+    def test_broken_batches_accepts_filters(self):
+        self.assertEqual(
+            [8],
+            [i.mfn for i in self.id_file.broken_batches(since="20191010")],
+        )
+
+    def test_broken_batches_are_not_documents(self):
+        self.assertEqual([1, 9], [i.mfn for i in self.id_file.items(kind="document")])
 
 
 class TestLineBreaksInsideFieldContent(IdFileTestBase):

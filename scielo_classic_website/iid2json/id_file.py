@@ -57,6 +57,14 @@ ID_TAGS = {
     ARTIGO: ("v706", "v880", "v702", "v035", "v036"),
 }
 
+# ordem dos tipos de registro (v706) de um documento na base artigo.
+# Tipos podem faltar, mas a ordem não se inverte (ex.: "o" nunca vem depois
+# de "h"); "p", "c" e "r" se repetem em sequência.
+ARTIGO_RECORD_TYPES_ORDER = {
+    rec_type: rank for rank, rec_type in enumerate("ohflpcr")
+}
+ARTIGO_REPEATABLE_RECORD_TYPES = {"p", "c", "r"}
+
 ID_FUNCTIONS = {
     TITLE: id2json3.journal_id,
     ISSUE: id2json3.issue_id,
@@ -183,6 +191,7 @@ class IdFileItem:
         "date",
         "offset",
         "record_type",
+        "record_types",
         "_raw_records",
         "_records",
         "_main_records",
@@ -205,6 +214,7 @@ class IdFileItem:
         encoding="iso-8859-1",
         mfn=None,
         last_mfn=None,
+        record_types=None,
     ):
         self.db_type = db_type
         # MFN do primeiro e do último registro do item (linha "!ID")
@@ -214,6 +224,8 @@ class IdFileItem:
         self.date = date
         self.offset = offset
         self.record_type = record_type
+        # tipos (v706) dos registros do item no arquivo principal, em ordem
+        self.record_types = tuple(record_types or ())
         self._raw_records = raw_records
         self._records = None
         self._main_records = None
@@ -305,8 +317,11 @@ class IdFileItem:
     def kind(self):
         """
         title -> "journal"; issue -> "issue";
-        artigo -> "issue" (registro i), "document" (registro o com PID de
-        23 caracteres) ou "invalid".
+        artigo -> "issue" (registro i), "document" ou "broken".
+
+        Em artigo, é "document" o lote que começa com registro "o", tem
+        registro "h" e PID de 23 caracteres. Qualquer outro lote é
+        "broken" e não deve ser processado como documento.
         """
         if self.db_type == TITLE:
             return "journal"
@@ -314,9 +329,14 @@ class IdFileItem:
             return "issue"
         if self.record_type == "i":
             return "issue"
-        if self.record_type == "o" and self.pid and len(self.pid) == 23:
+        if (
+            self.record_type == "o"
+            and "h" in self.record_types
+            and self.pid
+            and len(self.pid) == 23
+        ):
             return "document"
-        return "invalid"
+        return "broken"
 
     @property
     def issue_pid(self):
@@ -444,8 +464,10 @@ class ClassicIdFile:
         """
         Agrupa registros consecutivos com o mesmo PID e retorna ``IdFileItem``.
 
-        Em artigo, os registros o, h, f, l, p, r, c, ... de um documento
-        formam um único item; todo registro "o" inicia um novo documento. O registro "i" (registro do fascículo) não
+        Em artigo, os registros de um documento formam um lote que segue a
+        ordem o, h, f, l, p, c, r (tipos podem faltar). Um novo lote começa
+        quando a ordem se inverte (ex.: "o" ou "h" depois de "c"), quando um
+        tipo que não se repete aparece de novo ou quando o PID muda. O registro "i" (registro do fascículo) não
         faz parte de nenhum documento: não interrompe nem integra o grupo
         do documento e é retornado como item próprio (kind="issue").
         Registros sem v706 (ex.: apenas ``v880=S`` e ``v936``) não pertencem
@@ -458,6 +480,7 @@ class ClassicIdFile:
         pending_issues = []
 
         item_id = None
+        last_rank = None
         group_keys = []
         group_lines = []
         group_offset = start
@@ -485,9 +508,18 @@ class ClassicIdFile:
                         return
                 continue
 
-            # em artigo, todo registro "o" inicia um novo documento
-            starts_document = is_artigo and record_type == "o" and group_lines
-            if starts_document or (item_id and new_id != item_id):
+            # em artigo, novo lote quando a ordem dos tipos se inverte ou um
+            # tipo que não se repete aparece de novo
+            breaks_sequence = False
+            rank = None
+            if is_artigo:
+                rank = ARTIGO_RECORD_TYPES_ORDER.get(record_type)
+                if group_lines and rank is not None and last_rank is not None:
+                    breaks_sequence = rank < last_rank or (
+                        rank == last_rank
+                        and record_type not in ARTIGO_REPEATABLE_RECORD_TYPES
+                    )
+            if breaks_sequence or (item_id and new_id != item_id):
                 yield self._build_item(
                     item_id, group_offset, group_keys, group_lines, date_tag,
                     group_mfns,
@@ -499,6 +531,9 @@ class ClassicIdFile:
                 group_keys = []
                 group_lines = []
                 group_mfns = []
+                last_rank = None
+            if rank is not None:
+                last_rank = rank
             if not group_lines:
                 group_offset = record_offset
             item_id = new_id
@@ -532,6 +567,7 @@ class ClassicIdFile:
             encoding=self.encoding,
             mfn=mfns[0] if mfns else None,
             last_mfn=mfns[-1] if mfns else None,
+            record_types=[id2json3._get_value(keys, "v706") for keys in group_keys],
         )
 
     # ------------------------------------------------------------------
@@ -557,7 +593,7 @@ class ClassicIdFile:
             retorna somente estes PIDs
         kind: str | iterable of str
             filtra por ``item.kind`` ("document", "issue", "journal",
-            "invalid"); útil para artigo
+            "broken"); útil para artigo
         include_undated: bool
             ao filtrar por data, inclui itens sem data
         date_field: str
@@ -585,6 +621,17 @@ class ClassicIdFile:
                 elif (since and item.date < since) or (until and item.date > until):
                     continue
             yield item
+
+    def broken_batches(self, **filters):
+        """
+        Lotes de registros de artigo que não formam um documento
+        (kind="broken"), ex.: registro "o" sem "h", registros "h", "f"...
+        sem "o". Não devem ser processados como documentos; cabe à
+        aplicação avaliá-los. ``item.record_types``, ``item.mfn``,
+        ``item.last_mfn`` e ``item.offset`` os localizam no arquivo.
+        """
+        filters["kind"] = "broken"
+        return self.items(**filters)
 
     def pids(self, **filters):
         """Retorna somente os PIDs (sem parse completo dos registros)"""
