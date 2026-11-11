@@ -91,7 +91,7 @@ Filtros de `items()`, que podem ser combinados:
 |---|---|
 | `since`, `until` | Intervalo de datas (inclusivo). Aceita data parcial: `"2024"`, `"2024-03"`, `date`, `datetime`. `until="2024"` inclui o ano inteiro. |
 | `pids` | Lista de PIDs. |
-| `kind` | `"document"`, `"issue"` ou `"invalid"` em artigo; `"journal"` em title; `"issue"` em issue. |
+| `kind` | `"document"`, `"issue"` ou `"broken"` em artigo; `"journal"` em title; `"issue"` em issue. |
 | `date_field` | Campo de data: `"update"` (padrão), `"creation"`, `"publication"` (só artigo) ou uma tag (`"v091"`). |
 | `include_undated` | Com filtro de data, inclui itens sem data (padrão `False`). |
 
@@ -144,8 +144,11 @@ e o conteúdo sem subcampo em `"_"`:
 
 ## Regras de leitura da base `artigo`
 
-- Os registros `o`, `h`, `f`, `l`, `p`, `r`, `c`... de um documento formam um
-  único item. Todo registro `o` inicia um novo documento.
+- Os registros de um documento formam um lote que segue a ordem
+  `o`, `h`, `f`, `l`, `p`, `c`, `r`. Tipos podem faltar, mas a ordem não se
+  inverte (`o` nunca vem depois de `h`), e só `p`, `c` e `r` se repetem.
+  Um novo lote começa quando a ordem se inverte, quando um tipo que não se
+  repete aparece de novo ou quando o PID muda.
 - O registro `i` (fascículo) não faz parte de nenhum documento. Ele é
   retornado como item próprio (`kind="issue"`), mesmo quando está no meio
   dos registros de um documento.
@@ -154,8 +157,25 @@ e o conteúdo sem subcampo em `"_"`:
   usados e o arquivo externo não é consultado. Se não tem, `records` inclui
   os `p` de `{base}/artigo/p/{pid[1:10]}/{pid[10:14]}/{pid[14:18]}/{pid[-5:]}.id`,
   quando o arquivo existe. Se não existe, o documento fica sem `p`.
-- `kind="invalid"`: documento sem registro `o` ou com PID fora do padrão de
-  23 caracteres.
+- `kind="document"`: lote que começa com `o`, tem `h` e PID de 23
+  caracteres. Qualquer outro lote é `kind="broken"`.
+
+### Lotes quebrados
+
+Lotes quebrados não são documentos e não devem ser processados como
+tais. A biblioteca não os avalia nem gera erro; só os disponibiliza para que
+a aplicação os trate:
+
+```python
+for batch in docs.broken_batches():   # = items(kind="broken"); aceita filtros
+    batch.pid
+    batch.record_types   # ("h", "f", "l", "c", ...)
+    batch.mfn, batch.last_mfn, batch.offset
+    batch.records
+```
+
+Exemplos encontrados num arquivo real: um `o` solto (o documento completo
+aparece mais adiante) e um lote `h`, `f`, `l`, `c`... sem `o`.
 
 Em todas as bases, quebras de linha dentro do conteúdo de um campo viram um
 espaço simples. Só é campo novo uma linha `!v<tag>!` e só é registro novo
@@ -209,6 +229,7 @@ alguns casos:
 
 - registros `i` repetidos ou no meio de um documento não separam o documento;
 - registros sem v706 não são anexados ao documento seguinte;
+- lotes sem registro `o` ou `h` são `kind="broken"`, não documentos;
 - campos com o byte `\x85` não são cortados;
 - linhas vazias são ignoradas;
 - arquivo inexistente gera `FileNotFoundError`, em vez de retornar uma lista
