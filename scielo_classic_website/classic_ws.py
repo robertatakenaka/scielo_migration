@@ -3,6 +3,7 @@ import os
 import glob
 
 from scielo_classic_website.iid2json import id2json3
+from scielo_classic_website.iid2json.id_file import ClassicIdFile
 from scielo_classic_website.isisdb.isis_cmd import ISISCommader
 # manter Document, Issue, Journal imports para evitar quebra em outras partes do sistema
 from scielo_classic_website.models.document import Document
@@ -144,6 +145,33 @@ class ClassicWebsite:
         # Padrão otimizado: busca diretamente por fbpe seguido de qualquer estrutura que termine em acron/issue_folder
         pattern = os.path.join(root_path, "**", "fbpe", "**", acron, issue_folder)
         yield from glob.glob(pattern, recursive=True)
+
+    def get_id_file(self, db_type, source_path, **kwargs):
+        """
+        Retorna ClassicIdFile para `source_path` (arquivo .id ou base ISIS,
+        neste caso o .id é gerado). kwargs: date_field, encoding
+        """
+        id_file_path = self.isis_commander.get_id_file_path(source_path)
+        if db_type in ("artigo", "article", "document"):
+            kwargs.setdefault(
+                "p_records_base_paths",
+                [
+                    self.classic_website_paths.bases_work_path,
+                    self.classic_website_paths.bases_path,
+                ],
+            )
+        return ClassicIdFile(db_type, id_file_path, **kwargs)
+
+    def get_journals_id_file(self, **kwargs):
+        return self.get_id_file("title", self.classic_website_paths.title_path, **kwargs)
+
+    def get_issues_id_file(self, **kwargs):
+        return self.get_id_file("issue", self.classic_website_paths.issue_path, **kwargs)
+
+    def get_documents_id_files(self, acron, issue_folder=None, issue_pid=None, **kwargs):
+        source_paths = self.get_source_paths(acron, issue_folder, issue_pid) or []
+        for source_path in source_paths:
+            yield self.get_id_file("artigo", source_path, **kwargs)
 
     def get_journals_pids_and_records(self):
         id_file_path = self.isis_commander.get_id_file_path(
