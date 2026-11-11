@@ -472,9 +472,34 @@ class TestArtigoDocumentRequiresOAndHRecords(IdFileTestBase):
         )
 
     def test_broken_batch_does_not_read_external_p_records(self):
-        item = self.id_file.get("S0044-59672019000300002")
-        self.assertEqual("broken", item.kind)
-        self.assertIsNone(item.external_p_records_path)
+        # arquivos p externos existem para o documento válido (00001) e para
+        # o lote quebrado "o", "f" (00002); só o documento deve usá-los
+        with tempfile.TemporaryDirectory() as bases:
+            p_dir = os.path.join(bases, "artigo", "p", "0044-5967", "2019", "0003")
+            os.makedirs(p_dir)
+            for number in ("00001", "00002"):
+                with open(os.path.join(p_dir, f"{number}.id"), "w") as fp:
+                    fp.write(
+                        f"!ID 0000001\n!v706!p\n"
+                        f"!v880!S0044-596720190003{number}\n!v704!paragrafo\n"
+                    )
+            id_file = ClassicIdFile(
+                "artigo", self.path, p_records_base_paths=[bases]
+            )
+
+            document = id_file.get("S0044-59672019000300001")
+            self.assertEqual("document", document.kind)
+            self.assertEqual(
+                os.path.join(p_dir, "00001.id"), document.external_p_records_path
+            )
+            self.assertEqual(1, len(document.p_records))
+
+            broken = id_file.get("S0044-59672019000300002")
+            self.assertEqual("broken", broken.kind)
+            self.assertEqual("o", broken.record_type)
+            self.assertIsNone(broken.external_p_records_path)
+            self.assertEqual([], broken.external_p_records)
+            self.assertEqual([], broken.p_records)
 
 
 class TestArtigoBatchesFollowRecordTypesOrder(IdFileTestBase):
