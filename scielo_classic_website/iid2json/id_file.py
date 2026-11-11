@@ -57,6 +57,14 @@ ID_TAGS = {
     ARTIGO: ("v706", "v880", "v702", "v035", "v036"),
 }
 
+# ordem dos tipos de registro (v706) de um documento na base artigo.
+# Tipos podem faltar, mas a ordem não se inverte (ex.: "o" nunca vem depois
+# de "h"); "p", "c" e "r" se repetem em sequência.
+ARTIGO_RECORD_TYPES_ORDER = {
+    rec_type: rank for rank, rec_type in enumerate("ohflpcr")
+}
+ARTIGO_REPEATABLE_RECORD_TYPES = {"p", "c", "r"}
+
 ID_FUNCTIONS = {
     TITLE: id2json3.journal_id,
     ISSUE: id2json3.issue_id,
@@ -90,13 +98,9 @@ def normalize_db_type(db_type):
 
 def normalize_date(value, fill="0"):
     """
-    Converte ``value`` para string ``YYYYMMDD`` (formato das bases ISIS).
-
-    Aceita ``datetime.date``, ``datetime.datetime`` ou str
-    (``"2024"``, ``"2024-03"``, ``"2024-03-15"``, ``"20240315"``).
-    Datas parciais são completadas com ``fill``: ``"0"`` para limite
-    inferior e ``"9"`` para limite superior, assim ``until="2024"`` inclui
-    todo o ano de 2024.
+    Converte a data lida do registro (``item.date``) para string
+    ``YYYYMMDD``. Valores incompletos são completados com ``fill``.
+    Os filtros ``since``/``until`` usam ``filter_date``.
     """
     if value is None:
         return None
@@ -106,6 +110,18 @@ def normalize_date(value, fill="0"):
     if not digits:
         return None
     return digits.ljust(8, fill)
+
+
+def filter_date(value):
+    """
+    Valor de ``since``/``until`` como string ``YYYYMMDD``, o mesmo formato
+    de ``item.date``. ``date``/``datetime`` são convertidos.
+    """
+    if value is None:
+        return None
+    if isinstance(value, (datetime.date, datetime.datetime)):
+        return value.strftime("%Y%m%d")
+    return str(value)
 
 
 def get_p_records_file_path(pid, base_paths):
@@ -183,6 +199,8 @@ class IdFileItem:
         "date",
         "offset",
         "record_type",
+        "record_types",
+        "_kind",
         "_raw_records",
         "_records",
         "_main_records",
@@ -205,6 +223,7 @@ class IdFileItem:
         encoding="iso-8859-1",
         mfn=None,
         last_mfn=None,
+        record_types=None,
     ):
         self.db_type = db_type
         # MFN do primeiro e do último registro do item (linha "!ID")
@@ -214,6 +233,9 @@ class IdFileItem:
         self.date = date
         self.offset = offset
         self.record_type = record_type
+        # tipos (v706) dos registros do item no arquivo principal, em ordem
+        self.record_types = tuple(record_types or ())
+        self._kind = None
         self._raw_records = raw_records
         self._records = None
         self._main_records = None
@@ -305,18 +327,31 @@ class IdFileItem:
     def kind(self):
         """
         title -> "journal"; issue -> "issue";
-        artigo -> "issue" (registro i), "document" (registro o com PID de
-        23 caracteres) ou "invalid".
+        artigo -> "issue" (registro i), "document" ou "broken".
+
+        Em artigo, é "document" o lote que começa com registro "o", tem
+        registro "h" e PID de 23 caracteres. Qualquer outro lote é
+        "broken" e não deve ser processado como documento.
         """
+        if self._kind is None:
+            self._kind = self._get_kind()
+        return self._kind
+
+    def _get_kind(self):
         if self.db_type == TITLE:
             return "journal"
         if self.db_type == ISSUE:
             return "issue"
         if self.record_type == "i":
             return "issue"
-        if self.record_type == "o" and self.pid and len(self.pid) == 23:
+        if (
+            self.record_type == "o"
+            and "h" in self.record_types
+            and self.pid
+            and len(self.pid) == 23
+        ):
             return "document"
-        return "invalid"
+        return "broken"
 
     @property
     def issue_pid(self):
@@ -372,6 +407,28 @@ class ClassicIdFile:
             p_records_base_paths = [p_records_base_paths]
         self.p_records_base_paths = p_records_base_paths
         self._index = None
+        # posições (offset) dos lotes quebrados registradas na última
+        # leitura completa e a "assinatura" do arquivo nessa leitura
+        self._broken_offsets = None
+        self._broken_offsets_signature = None
+
+    def _file_signature(self):
+        stat = os.stat(self.path)
+        return stat.st_size, stat.st_mtime_ns
+
+    def _known_broken_offsets(self):
+        """
+        Posições dos lotes quebrados, se registradas numa leitura completa
+        e o arquivo não mudou desde então; caso contrário, None.
+        """
+        if self._broken_offsets is None:
+            return None
+        try:
+            if self._file_signature() != self._broken_offsets_signature:
+                return None
+        except OSError:
+            return None
+        return self._broken_offsets
 
     def __repr__(self):
         return f"ClassicIdFile({self.db_type!r}, {self.path!r})"
@@ -442,10 +499,32 @@ class ClassicIdFile:
 
     def _iter_groups(self, date_tag, start=0, stop_after_first=False):
         """
+        Retorna os itens do arquivo (``_read_groups``). Em artigo, numa
+        leitura completa, registra a posição dos lotes quebrados (um inteiro
+        por lote), para que ``broken_batches()`` os leia sem reler o arquivo.
+        Se a leitura for interrompida, nada é registrado.
+        """
+        groups = self._read_groups(date_tag, start, stop_after_first)
+        if self.db_type != ARTIGO or start or stop_after_first:
+            yield from groups
+            return
+        signature = self._file_signature()
+        broken_offsets = []
+        for item in groups:
+            if item.kind == "broken":
+                broken_offsets.append(item.offset)
+            yield item
+        self._broken_offsets = broken_offsets
+        self._broken_offsets_signature = signature
+
+    def _read_groups(self, date_tag, start=0, stop_after_first=False):
+        """
         Agrupa registros consecutivos com o mesmo PID e retorna ``IdFileItem``.
 
-        Em artigo, os registros o, h, f, l, p, r, c, ... de um documento
-        formam um único item; todo registro "o" inicia um novo documento. O registro "i" (registro do fascículo) não
+        Em artigo, os registros de um documento formam um lote que segue a
+        ordem o, h, f, l, p, c, r (tipos podem faltar). Um novo lote começa
+        quando a ordem se inverte (ex.: "o" ou "h" depois de "c"), quando um
+        tipo que não se repete aparece de novo ou quando o PID muda. O registro "i" (registro do fascículo) não
         faz parte de nenhum documento: não interrompe nem integra o grupo
         do documento e é retornado como item próprio (kind="issue").
         Registros sem v706 (ex.: apenas ``v880=S`` e ``v936``) não pertencem
@@ -458,6 +537,7 @@ class ClassicIdFile:
         pending_issues = []
 
         item_id = None
+        last_rank = None
         group_keys = []
         group_lines = []
         group_offset = start
@@ -485,9 +565,18 @@ class ClassicIdFile:
                         return
                 continue
 
-            # em artigo, todo registro "o" inicia um novo documento
-            starts_document = is_artigo and record_type == "o" and group_lines
-            if starts_document or (item_id and new_id != item_id):
+            # em artigo, novo lote quando a ordem dos tipos se inverte ou um
+            # tipo que não se repete aparece de novo
+            breaks_sequence = False
+            rank = None
+            if is_artigo:
+                rank = ARTIGO_RECORD_TYPES_ORDER.get(record_type)
+                if group_lines and rank is not None and last_rank is not None:
+                    breaks_sequence = rank < last_rank or (
+                        rank == last_rank
+                        and record_type not in ARTIGO_REPEATABLE_RECORD_TYPES
+                    )
+            if breaks_sequence or (item_id and new_id != item_id):
                 yield self._build_item(
                     item_id, group_offset, group_keys, group_lines, date_tag,
                     group_mfns,
@@ -499,6 +588,9 @@ class ClassicIdFile:
                 group_keys = []
                 group_lines = []
                 group_mfns = []
+                last_rank = None
+            if rank is not None:
+                last_rank = rank
             if not group_lines:
                 group_offset = record_offset
             item_id = new_id
@@ -532,6 +624,7 @@ class ClassicIdFile:
             encoding=self.encoding,
             mfn=mfns[0] if mfns else None,
             last_mfn=mfns[-1] if mfns else None,
+            record_types=[id2json3._get_value(keys, "v706") for keys in group_keys],
         )
 
     # ------------------------------------------------------------------
@@ -547,44 +640,92 @@ class ClassicIdFile:
         date_field=None,
     ):
         """
-        Retorna ``IdFileItem`` (com ``pid``, ``date`` e ``records`` lazy).
+        Retorna os itens bons (``IdFileItem`` com ``pid``, ``date`` e
+        ``records`` lazy): em artigo, documentos e registros de fascículo.
+        Os lotes quebrados (kind="broken") não são retornados; para
+        auditoria, use ``broken_batches()``.
 
         Parameters
         ----------
-        since, until: date | datetime | str
-            intervalo de datas (inclusivo). Datas parciais aceitas ("2024").
+        since, until: str | date | datetime
+            intervalo de datas (inclusivo), str com 8 dígitos ``YYYYMMDD``
+            (ex.: "20240315"), ``date`` ou ``datetime``
         pids: iterable of str
             retorna somente estes PIDs
         kind: str | iterable of str
-            filtra por ``item.kind`` ("document", "issue", "journal",
-            "invalid"); útil para artigo
+            filtra por ``item.kind`` ("document", "issue", "journal");
+            útil para artigo
         include_undated: bool
             ao filtrar por data, inclui itens sem data
         date_field: str
             sobrescreve ``self.date_field`` nesta chamada
         """
-        date_tag = self._date_tag(date_field)
-        since = normalize_date(since, "0")
-        until = normalize_date(until, "9")
-        if pids is not None:
-            pids = set(pids)
         if isinstance(kind, str):
             kind = {kind}
         elif kind is not None:
             kind = set(kind)
+        match = self._matcher(since, until, pids, include_undated)
+        for item in self._iter_groups(self._date_tag(date_field)):
+            item_kind = item.kind
+            if item_kind == "broken":
+                continue
+            if kind is not None and item_kind not in kind:
+                continue
+            if match(item):
+                yield item
 
-        for item in self._iter_groups(date_tag):
+    def broken_batches(self):
+        """
+        Todos os lotes de registros de artigo que não formam um documento
+        (kind="broken"), ex.: registro "o" sem "h", registros "h", "f"...
+        sem "o". Ficam separados de ``items()`` para auditoria: não devem
+        ser processados como documentos e não são filtrados (os filtros
+        são de ``items()``). ``item.record_types``, ``item.mfn``,
+        ``item.last_mfn`` e ``item.offset`` os localizam no arquivo.
+
+        Se o arquivo já foi lido por completo (``items()``, ``build_index()``
+        ...) e não mudou, lê somente os lotes quebrados, a partir das
+        posições registradas, sem reler o arquivo.
+        """
+        if self.db_type != ARTIGO:
+            return
+        date_tag = self._date_tag(None)
+        offsets = self._known_broken_offsets()
+        if offsets is None:
+            for item in self._iter_groups(date_tag):
+                if item.kind == "broken":
+                    yield item
+        else:
+            yield from self._read_batches_at(offsets, date_tag)
+
+    def _read_batches_at(self, offsets, date_tag):
+        for offset in offsets:
+            for item in self._read_groups(
+                date_tag, start=offset, stop_after_first=True
+            ):
+                yield item
+
+    def _matcher(self, since, until, pids, include_undated):
+        """Retorna a função que aplica os filtros de PID e de data"""
+        since = filter_date(since)
+        until = filter_date(until)
+        if pids is not None:
+            pids = set(pids)
+
+        def match(item):
             if pids is not None and item.pid not in pids:
-                continue
-            if kind is not None and item.kind not in kind:
-                continue
+                return False
             if since or until:
                 if not item.date:
-                    if not include_undated:
-                        continue
-                elif (since and item.date < since) or (until and item.date > until):
-                    continue
-            yield item
+                    return include_undated
+                # inclusivo: since <= item.date <= until (YYYYMMDD)
+                if since and item.date < since:
+                    return False
+                if until and item.date > until:
+                    return False
+            return True
+
+        return match
 
     def pids(self, **filters):
         """Retorna somente os PIDs (sem parse completo dos registros)"""
@@ -616,9 +757,10 @@ class ClassicIdFile:
         diretamente via ``seek``, sem reler o arquivo inteiro.
         Se um PID aparece mais de uma vez, vale a última ocorrência
         (a mais recente, pois registros novos são adicionados ao final).
+        Lotes quebrados não entram no índice.
         """
         index = {}
-        for item in self._iter_groups(self._date_tag(date_field)):
+        for item in self.items(date_field=date_field):
             index[item.pid] = (item.offset, item.date)
         self._index = index
         return index
@@ -629,7 +771,8 @@ class ClassicIdFile:
 
     def get(self, pid, date_field=None):
         """
-        Retorna o ``IdFileItem`` de ``pid`` ou None.
+        Retorna o ``IdFileItem`` de ``pid`` ou None (somente itens bons;
+        lotes quebrados são ignorados).
         Se o PID aparece mais de uma vez, retorna a última ocorrência.
         Usa o índice se ``build_index()`` tiver sido chamado; caso contrário,
         lê o arquivo inteiro (para várias consultas, use ``build_index()``).
@@ -645,7 +788,6 @@ class ClassicIdFile:
                 return item
             return None
         found = None
-        for item in self._iter_groups(date_tag):
-            if item.pid == pid:
-                found = item
+        for item in self.items(pids=[pid], date_field=date_field):
+            found = item
         return found
