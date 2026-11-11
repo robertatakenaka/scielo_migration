@@ -115,12 +115,19 @@ class Document:
         self._document_records = document_records
 
     @cached_property
-    def processing_date(self):
+    def o_record(self):
+        """
+        Registro "o" do documento (contém v091 e v093)
+        """
         try:
-            item = self.document_records.get_record("o")[0]
-            return item.processing_date
-        except (KeyError, IndexError):
+            return self.document_records.get_record("o")[0]
+        except (KeyError, IndexError, TypeError):
             return None
+
+    @cached_property
+    def processing_date(self):
+        if self.o_record:
+            return self.o_record.processing_date
 
     @cached_property
     def h_record(self):
@@ -283,11 +290,15 @@ class Document:
             
     @property
     def isis_updated_date(self):
-        return self.h_record.update_date
+        # v091 do registro "o"
+        if self.o_record:
+            return self.o_record.update_date
 
     @property
     def isis_created_date(self):
-        return self.h_record.creation_date
+        # v093 do registro "o"
+        if self.o_record:
+            return self.o_record.creation_date
 
     @property
     def permissions(self):
